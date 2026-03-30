@@ -19,9 +19,14 @@ public final class SemetricsClient {
 
     // MARK: - Singleton
 
-    public private(set) static var shared: SemetricsClient = {
-        fatalError("Вызовите SemetricsClient.configure() перед использованием .shared")
-    }()
+    private static var _shared: SemetricsClient?
+
+    public static var shared: SemetricsClient {
+        guard let instance = _shared else {
+            fatalError("Вызовите SemetricsClient.configure() перед использованием .shared")
+        }
+        return instance
+    }
 
     public static func configure(
         apiKey: String,
@@ -31,7 +36,7 @@ public final class SemetricsClient {
         maxQueueSize: Int = 10_000,
         maxRetries: Int = 3
     ) {
-        shared = SemetricsClient(
+        _shared = SemetricsClient(
             apiKey: apiKey,
             endpoint: endpoint,
             flushInterval: flushInterval,
