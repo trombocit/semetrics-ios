@@ -6,6 +6,7 @@ public struct SemetricsEvent: Codable {
     public let userId: String?
     public let anonymousId: String?
     public let sessionId: String?
+    public let sourceId: String?
     public let platform: String
     public let sdkVersion: String
     public let clientTs: Date
@@ -16,6 +17,7 @@ public struct SemetricsEvent: Codable {
         case userId       = "user_id"
         case anonymousId  = "anonymous_id"
         case sessionId    = "session_id"
+        case sourceId     = "source_id"
         case platform
         case sdkVersion   = "sdk_version"
         case clientTs     = "client_ts"

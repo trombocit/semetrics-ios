@@ -18,7 +18,7 @@ https://github.com/trombocit/semetrics-ios
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trombocit/semetrics-ios", from: "0.1.0")
+    .package(url: "https://github.com/trombocit/semetrics-ios", from: "0.3.0")
 ]
 ```
 
@@ -31,7 +31,8 @@ import Semetrics
 // При запуске приложения
 SemetricsClient.configure(
     apiKey: "sm_live_ваш_ключ",
-    endpoint: "https://semetrics.ru/events"
+    endpoint: "https://semetrics.ru/events",
+    sourceId: Bundle.main.bundleIdentifier   // "com.beyondviolet.wfm"
 )
 
 // В любом месте приложения
@@ -48,6 +49,7 @@ SemetricsClient.shared.track(
 |----------|-------------|----------|
 | `apiKey` | обязательный | API-ключ проекта |
 | `endpoint` | `https://semetrics.ru/events` | URL сервиса |
+| `sourceId` | `nil` | Идентификатор источника (`Bundle.main.bundleIdentifier`) |
 | `flushInterval` | `5.0` | Интервал фонового сброса (секунды) |
 | `batchSize` | `50` | Размер батча |
 | `maxQueueSize` | `10_000` | Максимум событий в очереди |
