@@ -3,7 +3,7 @@ import Foundation
 import UIKit
 #endif
 
-private let sdkVersion = "0.3.0"
+private let sdkVersion = "0.4.0"
 
 /// Главный клиент Semetrics SDK для iOS/macOS.
 ///
@@ -32,6 +32,7 @@ public final class SemetricsClient {
         apiKey: String,
         endpoint: String = "https://semetrics.ru/events",
         sourceId: String? = nil,
+        sourceVersion: String? = nil,
         flushInterval: TimeInterval = 5,
         batchSize: Int = 50,
         maxQueueSize: Int = 10_000,
@@ -41,6 +42,7 @@ public final class SemetricsClient {
             apiKey: apiKey,
             endpoint: endpoint,
             sourceId: sourceId,
+            sourceVersion: sourceVersion,
             flushInterval: flushInterval,
             batchSize: batchSize,
             maxQueueSize: maxQueueSize,
@@ -53,6 +55,7 @@ public final class SemetricsClient {
     private let queue: EventQueue
     private let transport: NetworkTransport
     private let sourceId: String?
+    private let sourceVersion: String?
     private let batchSize: Int
     private let maxRetries: Int
     private var flushTimer: DispatchSourceTimer?
@@ -64,6 +67,7 @@ public final class SemetricsClient {
         apiKey: String,
         endpoint: String,
         sourceId: String?,
+        sourceVersion: String?,
         flushInterval: TimeInterval,
         batchSize: Int,
         maxQueueSize: Int,
@@ -72,6 +76,7 @@ public final class SemetricsClient {
         self.queue = EventQueue(maxSize: maxQueueSize)
         self.transport = NetworkTransport(endpoint: endpoint, apiKey: apiKey)
         self.sourceId = sourceId
+        self.sourceVersion = sourceVersion
         self.batchSize = batchSize
         self.maxRetries = maxRetries
 
@@ -96,6 +101,7 @@ public final class SemetricsClient {
             anonymousId: anonymousId,
             sessionId: sessionId,
             sourceId: sourceId,
+            sourceVersion: sourceVersion,
             platform: "ios",
             sdkVersion: sdkVersion,
             clientTs: Date(),
