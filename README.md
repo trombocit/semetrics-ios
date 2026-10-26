@@ -18,7 +18,7 @@ https://github.com/trombocit/semetrics-ios
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trombocit/semetrics-ios", from: "0.4.0")
+    .package(url: "https://github.com/trombocit/semetrics-ios", from: "0.5.0")
 ]
 ```
 
