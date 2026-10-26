@@ -15,5 +15,10 @@ let package = Package(
             name: "Semetrics",
             path: "Sources/Semetrics"
         ),
+        .testTarget(
+            name: "SemetricsTests",
+            dependencies: ["Semetrics"],
+            path: "Tests/SemetricsTests"
+        ),
     ]
 )

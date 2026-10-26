@@ -59,9 +59,9 @@ SemetricsClient.shared.track(
 
 ## Гарантия доставки
 
-- События хранятся в in-memory очереди, автоматически отправляются батчами
-- Автоматический flush при уходе в background (`UIApplication.didEnterBackgroundNotification`)
-- Retry с exponential backoff: 1s → 2s → 4s
+- События хранятся в SQLite и удаляются только после ответа сервера — переживают перезапуск и force kill
+- Автоматический flush при уходе в background, возврате в foreground и появлении сети
+- При временной ошибке (сеть, DNS, 5xx) батч возвращается в очередь, повтор с backoff 5s → … → 5 мин; при 4xx батч удаляется
 
 ## Принудительный flush
 

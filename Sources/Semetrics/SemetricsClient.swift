@@ -1,9 +1,10 @@
 import Foundation
+import Network
 #if canImport(UIKit)
 import UIKit
 #endif
 
-private let sdkVersion = "0.4.0"
+private let sdkVersion = "0.5.0"
 
 /// Главный клиент Semetrics SDK для iOS/macOS.
 ///
@@ -52,14 +53,16 @@ public final class SemetricsClient {
 
     // MARK: - Приватные свойства
 
-    private let queue: EventQueue
-    private let transport: NetworkTransport
+    private let pipeline: DeliveryPipeline
     private let sourceId: String?
     private let sourceVersion: String?
-    private let batchSize: Int
-    private let maxRetries: Int
     private var flushTimer: DispatchSourceTimer?
+    private let pathMonitor = NWPathMonitor()
+    private var lastPathStatus: NWPath.Status?
     private let workerQueue = DispatchQueue(label: "ru.semetrics.sdk.worker", qos: .utility)
+#if canImport(UIKit)
+    private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+#endif
 
     // MARK: - Инициализация
 
@@ -73,15 +76,18 @@ public final class SemetricsClient {
         maxQueueSize: Int,
         maxRetries: Int
     ) {
-        self.queue = EventQueue(maxSize: maxQueueSize)
-        self.transport = NetworkTransport(endpoint: endpoint, apiKey: apiKey)
+        self.pipeline = DeliveryPipeline(
+            queue: EventQueue(maxSize: maxQueueSize),
+            sender: NetworkTransport(endpoint: endpoint, apiKey: apiKey),
+            batchSize: batchSize,
+            maxRetries: maxRetries
+        )
         self.sourceId = sourceId
         self.sourceVersion = sourceVersion
-        self.batchSize = batchSize
-        self.maxRetries = maxRetries
 
         setupFlushTimer(interval: flushInterval)
         subscribeToAppLifecycle()
+        startNetworkMonitor()
     }
 
     // MARK: - Публичный API
@@ -107,14 +113,13 @@ public final class SemetricsClient {
             clientTs: Date(),
             properties: codableProperties
         )
-        Task { await queue.enqueue(event) }
+        Task { [pipeline] in await pipeline.queue.enqueue(event) }
     }
 
     /// Отправить все накопленные события прямо сейчас.
     public func flush() {
-        workerQueue.async { [weak self] in
-            guard let self else { return }
-            Task { await self.performFlush() }
+        workerQueue.async { [pipeline] in
+            Task { await pipeline.flush(force: true) }
         }
     }
 
@@ -123,37 +128,24 @@ public final class SemetricsClient {
     private func setupFlushTimer(interval: TimeInterval) {
         let timer = DispatchSource.makeTimerSource(queue: workerQueue)
         timer.schedule(deadline: .now() + interval, repeating: interval)
-        timer.setEventHandler { [weak self] in
-            Task { await self?.performFlush() }
+        timer.setEventHandler { [pipeline] in
+            Task { await pipeline.flush(force: false) }
         }
         timer.resume()
         flushTimer = timer
     }
 
-    private func performFlush() async {
-        while true {
-            let batch = await queue.dequeueBatch(batchSize)
-            guard !batch.isEmpty else { return }
-
-            var lastError: Error?
-            for attempt in 0..<maxRetries {
-                do {
-                    try await transport.sendBatch(batch)
-                    lastError = nil
-                    break
-                } catch {
-                    lastError = error
-                    if attempt < maxRetries - 1 {
-                        try? await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(attempt))) * 1_000_000_000)
-                    }
-                }
-            }
-
-            if let error = lastError {
-                // Не возвращаем в очередь — логируем потерю
-                print("[Semetrics] Батч из \(batch.count) событий потерян: \(error)")
+    /// Сеть появилась — отправляем сразу, не дожидаясь паузы backoff (до 5 мин).
+    private func startNetworkMonitor() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+            let wasOffline = self.lastPathStatus != nil && self.lastPathStatus != .satisfied
+            self.lastPathStatus = path.status
+            if wasOffline && path.status == .satisfied {
+                self.flush()
             }
         }
+        pathMonitor.start(queue: workerQueue)
     }
 
     private func subscribeToAppLifecycle() {
@@ -163,7 +155,7 @@ public final class SemetricsClient {
             object: nil,
             queue: nil
         ) { [weak self] _ in
-            self?.flush()
+            self?.flushInBackgroundTask()
         }
 
         NotificationCenter.default.addObserver(
@@ -175,4 +167,27 @@ public final class SemetricsClient {
         }
 #endif
     }
+
+#if canImport(UIKit)
+    /// При уходе в фон просим у iOS время дослать очередь — иначе приложение заморозят посреди запроса.
+    /// Вызывается на main thread (уведомления UIApplication), `backgroundTaskId` трогаем только там.
+    private func flushInBackgroundTask() {
+        endBackgroundTask()
+        let taskId = UIApplication.shared.beginBackgroundTask(withName: "ru.semetrics.flush") { [weak self] in
+            self?.endBackgroundTask()
+        }
+        backgroundTaskId = taskId
+        // self — singleton на всё время жизни приложения, сильный захват безопасен
+        Task { [pipeline] in
+            await pipeline.flush(force: true)
+            await MainActor.run { self.endBackgroundTask(ifCurrent: taskId) }
+        }
+    }
+
+    private func endBackgroundTask(ifCurrent taskId: UIBackgroundTaskIdentifier? = nil) {
+        guard backgroundTaskId != .invalid, taskId == nil || taskId == backgroundTaskId else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskId)
+        backgroundTaskId = .invalid
+    }
+#endif
 }
